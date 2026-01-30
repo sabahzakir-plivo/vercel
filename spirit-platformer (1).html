@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spirit of Light - A Dreamlike Journey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Georgia', serif;
+            background: linear-gradient(to bottom, #1a1a2e, #16213e);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #gameContainer {
+            position: relative;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #2d1b4e, #1a4d5e, #2d5a6e);
+            box-shadow: 0 0 50px rgba(138, 100, 200, 0.3);
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #e0d8f0;
+            font-size: 18px;
+            text-shadow: 0 0 10px rgba(224, 216, 240, 0.5);
+            z-index: 10;
+            background: rgba(45, 27, 78, 0.3);
+            padding: 15px 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        #winMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 36px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            z-index: 20;
+        }
+
+        #winMessage.show {
+            opacity: 1;
+        }
+
+        .orb-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle, #ffd700, #ff69b4);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+        }
+
+        #mobileControls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(200, 180, 230, 0.3);
+            border: 2px solid rgba(200, 180, 230, 0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #e0d8f0;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(138, 100, 200, 0.3);
+            transition: all 0.1s ease;
+            touch-action: manipulation;
+        }
+
+        .control-btn:active {
+            background: rgba(200, 180, 230, 0.5);
+            transform: scale(0.95);
+            box-shadow: 0 0 30px rgba(138, 100, 200, 0.5);
+        }
+
+        .control-btn.jump {
+            width: 90px;
+            height: 90px;
+            font-size: 32px;
+        }
+
+        @media (pointer: fine) {
+            #mobileControls {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #ui {
+                font-size: 14px;
+                padding: 10px 15px;
+            }
+
+            #winMessage {
+                font-size: 24px;
+                padding: 0 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div><span class="orb-icon"></span>Light Fragments: <span id="orbCount">0</span>/<span id="totalOrbs">0</span></div>
+        </div>
+        <div id="winMessage">
+            ✨ You've gathered all the light! ✨<br>
+            <span style="font-size: 20px; margin-top: 10px; display: block;">Press R to restart</span>
+        </div>
+        <div id="mobileControls">
+            <div class="control-group">
+                <div class="control-btn" id="leftBtn">←</div>
+                <div class="control-btn" id="rightBtn">→</div>
+            </div>
+            <div class="control-group">
+                <div class="control-btn jump" id="jumpBtn">↑</div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Responsive canvas sizing
+        function resizeCanvas() {
+            const maxWidth = window.innerWidth;
+            const maxHeight = window.innerHeight;
+            const aspectRatio = 16 / 9;
+            
+            let width = maxWidth;
+            let height = width / aspectRatio;
+            
+            if (height > maxHeight) {
+                height = maxHeight;
+                width = height * aspectRatio;
+            }
+            
+            canvas.width = 1280;
+            canvas.height = 720;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        const game = {
+            width: 1280,
+            height: 720,
+            gravity: 0.5,
+            keys: {},
+            particles: [],
+            backgroundParticles: [],
+            time: 0,
+            won: false
+        };
+
+        // Player (Spirit)
+        const player = {
+            x: 100,
+            y: 500,
+            width: 30,
+            height: 30,
+            vx: 0,
+            vy: 0,
+            speed: 4,
+            jumpPower: 12,
+            onGround: false,
+            glowPhase: 0
+        };
+
+        // Platforms
+        const platforms = [
+            // Ground platforms
+            { x: 0, y: 680, width: 400, height: 40, floating: false },
+            { x: 500, y: 650, width: 300, height: 40, floating: true, floatOffset: 0, floatSpeed: 0.02, floatRange: 30 },
+            { x: 900, y: 600, width: 250, height: 40, floating: true, floatOffset: Math.PI, floatSpeed: 0.025, floatRange: 40 },
+            { x: 300, y: 500, width: 200, height: 40, floating: true, floatOffset: Math.PI/2, floatSpeed: 0.03, floatRange: 25 },
+            { x: 600, y: 450, width: 180, height: 40, floating: true, floatOffset: Math.PI*1.5, floatSpeed: 0.028, floatRange: 35 },
+            { x: 1000, y: 400, width: 280, height: 40, floating: false },
+            { x: 200, y: 300, width: 220, height: 40, floating: true, floatOffset: Math.PI/3, floatSpeed: 0.022, floatRange: 28 },
+            { x: 700, y: 250, width: 200, height: 40, floating: true, floatOffset: Math.PI*1.2, floatSpeed: 0.026, floatRange: 32 },
+            { x: 400, y: 150, width: 300, height: 40, floating: false }
+        ];
+
+        // Light Orbs
+        const orbs = [
+            { x: 250, y: 450, collected: false, pulse: 0 },
+            { x: 620, y: 600, collected: false, pulse: Math.PI/3 },
+            { x: 1050, y: 550, collected: false, pulse: Math.PI/2 },
+            { x: 400, y: 350, collected: false, pulse: Math.PI },
+            { x: 750, y: 400, collected: false, pulse: Math.PI*1.5 },
+            { x: 1100, y: 350, collected: false, pulse: Math.PI/4 },
+            { x: 300, y: 250, collected: false, pulse: Math.PI*1.3 },
+            { x: 800, y: 200, collected: false, pulse: Math.PI/6 },
+            { x: 550, y: 100, collected: false, pulse: Math.PI*1.7 }
+        ];
+
+        // Update UI
+        function updateUI() {
+            const collected = orbs.filter(o => o.collected).length;
+            document.getElementById('orbCount').textContent = collected;
+            document.getElementById('totalOrbs').textContent = orbs.length;
+        }
+
+        updateUI();
+
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+            game.keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'r' && game.won) {
+                location.reload();
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            game.keys[e.key.toLowerCase()] = false;
+        });
+
+        // Mobile touch controls
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const jumpBtn = document.getElementById('jumpBtn');
+
+        function setupTouchControl(button, key) {
+            // Touch events
+            button.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                game.keys[key] = true;
+            });
+            
+            button.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                game.keys[key] = false;
+            });
+            
+            button.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                game.keys[key] = false;
+            });
+
+            // Mouse events for testing on desktop
+            button.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                game.keys[key] = true;
+            });
+            
+            button.addEventListener('mouseup', (e) => {
+                e.preventDefault();
+                game.keys[key] = false;
+            });
+            
+            button.addEventListener('mouseleave', (e) => {
+                game.keys[key] = false;
+            });
+        }
+
+        setupTouchControl(leftBtn, 'a');
+        setupTouchControl(rightBtn, 'd');
+        setupTouchControl(jumpBtn, 'w');
+
+        // Prevent default touch behavior on the canvas
+        canvas.addEventListener('touchstart', (e) => e.preventDefault());
+        canvas.addEventListener('touchmove', (e) => e.preventDefault());
+        canvas.addEventListener('touchend', (e) => e.preventDefault());
+
+        // Particle system
+        class Particle {
+            constructor(x, y, color, size, vx, vy, life) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = size;
+                this.vx = vx;
+                this.vy = vy;
+                this.life = life;
+                this.maxLife = life;
+                this.alpha = 1;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.05; // Slight gravity
+                this.life--;
+                this.alpha = this.life / this.maxLife;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Background particles for atmosphere
+        function createBackgroundParticles() {
+            for (let i = 0; i < 50; i++) {
+                game.backgroundParticles.push({
+                    x: Math.random() * game.width,
+                    y: Math.random() * game.height,
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 0.3 + 0.1,
+                    alpha: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+
+        createBackgroundParticles();
+
+        // Draw gradient sky with shifting colors
+        function drawSky() {
+            const gradient = ctx.createLinearGradient(0, 0, 0, game.height);
+            
+            const t = Math.sin(game.time * 0.001) * 0.5 + 0.5;
+            
+            const r1 = Math.floor(45 + t * 30);
+            const g1 = Math.floor(27 + t * 40);
+            const b1 = Math.floor(78 + t * 50);
+            
+            const r2 = Math.floor(26 + t * 25);
+            const g2 = Math.floor(77 + t * 30);
+            const b2 = Math.floor(94 + t * 40);
+            
+            const r3 = Math.floor(45 + t * 35);
+            const g3 = Math.floor(90 + t * 45);
+            const b3 = Math.floor(110 + t * 50);
+            
+            gradient.addColorStop(0, `rgb(${r1}, ${g1}, ${b1})`);
+            gradient.addColorStop(0.5, `rgb(${r2}, ${g2}, ${b2})`);
+            gradient.addColorStop(1, `rgb(${r3}, ${g3}, ${b3})`);
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, game.width, game.height);
+        }
+
+        // Draw floating background particles
+        function drawBackgroundParticles() {
+            game.backgroundParticles.forEach(p => {
+                p.y -= p.speed;
+                if (p.y < -10) p.y = game.height + 10;
+                
+                ctx.save();
+                ctx.globalAlpha = p.alpha * (0.5 + Math.sin(game.time * 0.002 + p.x) * 0.3);
+                ctx.fillStyle = '#e0d8f0';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#e0d8f0';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // Draw platforms with dreamy appearance
+        function drawPlatforms() {
+            platforms.forEach(platform => {
+                let y = platform.y;
+                
+                if (platform.floating) {
+                    platform.floatOffset += platform.floatSpeed;
+                    y += Math.sin(platform.floatOffset) * platform.floatRange;
+                }
+                
+                // Cloud-like platform with gradient
+                const gradient = ctx.createLinearGradient(
+                    platform.x, y, 
+                    platform.x, y + platform.height
+                );
+                gradient.addColorStop(0, 'rgba(200, 180, 230, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(150, 130, 200, 0.9)');
+                gradient.addColorStop(1, 'rgba(120, 100, 180, 0.7)');
+                
+                ctx.save();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'rgba(200, 180, 230, 0.5)';
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.roundRect(platform.x, y, platform.width, platform.height, 20);
+                ctx.fill();
+                ctx.restore();
+                
+                // Store current y for collision
+                platform.currentY = y;
+            });
+        }
+
+        // Draw player spirit
+        function drawPlayer() {
+            player.glowPhase += 0.05;
+            const glowSize = 15 + Math.sin(player.glowPhase) * 5;
+            
+            // Outer glow
+            const outerGradient = ctx.createRadialGradient(
+                player.x, player.y, 0,
+                player.x, player.y, glowSize * 2
+            );
+            outerGradient.addColorStop(0, 'rgba(138, 100, 200, 0.4)');
+            outerGradient.addColorStop(0.5, 'rgba(100, 150, 255, 0.2)');
+            outerGradient.addColorStop(1, 'rgba(138, 100, 200, 0)');
+            
+            ctx.fillStyle = outerGradient;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, glowSize * 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Main spirit body
+            const gradient = ctx.createRadialGradient(
+                player.x, player.y, 0,
+                player.x, player.y, player.width
+            );
+            gradient.addColorStop(0, '#ffffff');
+            gradient.addColorStop(0.3, '#c8b4e6');
+            gradient.addColorStop(0.7, '#8a64c8');
+            gradient.addColorStop(1, 'rgba(138, 100, 200, 0.5)');
+            
+            ctx.save();
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#c8b4e6';
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            
+            // Trailing particles
+            if (Math.random() < 0.3) {
+                game.particles.push(new Particle(
+                    player.x + (Math.random() - 0.5) * 20,
+                    player.y + (Math.random() - 0.5) * 20,
+                    ['#c8b4e6', '#8a64c8', '#6496ff'][Math.floor(Math.random() * 3)],
+                    Math.random() * 3 + 2,
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2 - 1,
+                    30 + Math.random() * 20
+                ));
+            }
+        }
+
+        // Draw orbs
+        function drawOrbs() {
+            orbs.forEach(orb => {
+                if (orb.collected) return;
+                
+                orb.pulse += 0.03;
+                const pulseSize = 8 + Math.sin(orb.pulse) * 3;
+                
+                // Outer glow
+                const outerGlow = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, pulseSize * 3);
+                outerGlow.addColorStop(0, 'rgba(255, 215, 0, 0.3)');
+                outerGlow.addColorStop(0.5, 'rgba(255, 105, 180, 0.2)');
+                outerGlow.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                
+                ctx.fillStyle = outerGlow;
+                ctx.beginPath();
+                ctx.arc(orb.x, orb.y, pulseSize * 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Main orb
+                const gradient = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, pulseSize);
+                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(0.4, '#ffd700');
+                gradient.addColorStop(0.8, '#ff69b4');
+                gradient.addColorStop(1, 'rgba(255, 105, 180, 0.5)');
+                
+                ctx.save();
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = '#ffd700';
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(orb.x, orb.y, pulseSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // Update player
+        function updatePlayer() {
+            if (game.won) return;
+            
+            // Horizontal movement
+            if (game.keys['arrowleft'] || game.keys['a']) {
+                player.vx = -player.speed;
+            } else if (game.keys['arrowright'] || game.keys['d']) {
+                player.vx = player.speed;
+            } else {
+                player.vx *= 0.8; // Friction
+            }
+            
+            // Jump
+            if ((game.keys['arrowup'] || game.keys['w'] || game.keys[' ']) && player.onGround) {
+                player.vy = -player.jumpPower;
+                player.onGround = false;
+            }
+            
+            // Apply gravity
+            player.vy += game.gravity;
+            
+            // Update position
+            player.x += player.vx;
+            player.y += player.vy;
+            
+            // Screen bounds
+            if (player.x < player.width / 2) player.x = player.width / 2;
+            if (player.x > game.width - player.width / 2) player.x = game.width - player.width / 2;
+            
+            // Platform collision
+            player.onGround = false;
+            platforms.forEach(platform => {
+                const py = platform.currentY || platform.y;
+                
+                if (player.x + player.width / 2 > platform.x &&
+                    player.x - player.width / 2 < platform.x + platform.width &&
+                    player.y + player.height / 2 > py &&
+                    player.y + player.height / 2 < py + platform.height &&
+                    player.vy >= 0) {
+                    
+                    player.y = py - player.height / 2;
+                    player.vy = 0;
+                    player.onGround = true;
+                }
+            });
+            
+            // Collect orbs
+            orbs.forEach(orb => {
+                if (orb.collected) return;
+                
+                const dx = player.x - orb.x;
+                const dy = player.y - orb.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.width) {
+                    orb.collected = true;
+                    updateUI();
+                    
+                    // Collection particles
+                    for (let i = 0; i < 20; i++) {
+                        const angle = (Math.PI * 2 * i) / 20;
+                        game.particles.push(new Particle(
+                            orb.x,
+                            orb.y,
+                            ['#ffd700', '#ff69b4', '#ffffff'][Math.floor(Math.random() * 3)],
+                            Math.random() * 4 + 2,
+                            Math.cos(angle) * (Math.random() * 3 + 2),
+                            Math.sin(angle) * (Math.random() * 3 + 2),
+                            40 + Math.random() * 20
+                        ));
+                    }
+                    
+                    // Check win condition
+                    if (orbs.every(o => o.collected)) {
+                        game.won = true;
+                        document.getElementById('winMessage').classList.add('show');
+                    }
+                }
+            });
+            
+            // Fall off screen reset
+            if (player.y > game.height + 100) {
+                player.x = 100;
+                player.y = 500;
+                player.vx = 0;
+                player.vy = 0;
+            }
+        }
+
+        // Update particles
+        function updateParticles() {
+            game.particles = game.particles.filter(p => {
+                p.update();
+                return p.life > 0;
+            });
+        }
+
+        // Main game loop
+        function gameLoop() {
+            game.time++;
+            
+            // Clear and draw sky
+            drawSky();
+            
+            // Draw background elements
+            drawBackgroundParticles();
+            
+            // Update and draw game elements
+            updatePlayer();
+            updateParticles();
+            
+            drawPlatforms();
+            drawOrbs();
+            
+            // Draw particles
+            game.particles.forEach(p => p.draw());
+            
+            drawPlayer();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
