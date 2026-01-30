@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pattern Memory - A Cognitive Challenge</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --accent-primary: #00ff88;
+            --accent-secondary: #00ccff;
+            --text-primary: #e8e8e8;
+            --text-secondary: #888888;
+            --grid-border: #222222;
+            --glow: rgba(0, 255, 136, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Syne', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 255, 136, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(0, 204, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 2rem;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            animation: fadeIn 1s ease-out 0.2s both;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-bottom: 2.5rem;
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            font-family: 'Syne', sans-serif;
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            max-width: 450px;
+            margin: 0 auto 2.5rem;
+            perspective: 1000px;
+            animation: fadeInScale 0.8s ease-out 0.6s both;
+        }
+
+        .grid-cell {
+            aspect-ratio: 1;
+            background: var(--bg-secondary);
+            border: 1px solid var(--grid-border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-cell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .grid-cell:hover:not(.active):not(.pattern):not(.disabled) {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 255, 136, 0.2);
+        }
+
+        .grid-cell.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-color: var(--accent-primary);
+            box-shadow: 
+                0 0 30px var(--glow),
+                0 0 60px var(--glow);
+            transform: scale(0.95);
+        }
+
+        .grid-cell.pattern {
+            animation: flash 0.5s ease-out;
+        }
+
+        .grid-cell.correct {
+            animation: correctPulse 0.5s ease-out;
+        }
+
+        .grid-cell.wrong {
+            animation: wrongShake 0.5s ease-out;
+            background: linear-gradient(135deg, #ff0055, #ff3366);
+            border-color: #ff0055;
+        }
+
+        .grid-cell.disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            animation: fadeIn 1s ease-out 0.8s both;
+        }
+
+        .btn {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 1rem 2.5rem;
+            border: 2px solid var(--accent-primary);
+            background: transparent;
+            color: var(--accent-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--accent-primary);
+            transition: left 0.3s ease;
+            z-index: -1;
+        }
+
+        .btn:hover::before {
+            left: 0;
+        }
+
+        .btn:hover {
+            color: var(--bg-primary);
+            box-shadow: 0 8px 25px var(--glow);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .message {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            margin-top: 1.5rem;
+            min-height: 1.5rem;
+            color: var(--accent-secondary);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .message.error {
+            color: #ff0055;
+        }
+
+        .message.success {
+            color: var(--accent-primary);
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes flash {
+            0%, 100% {
+                background: var(--bg-secondary);
+                box-shadow: none;
+            }
+            50% {
+                background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+                box-shadow: 
+                    0 0 30px var(--glow),
+                    0 0 60px var(--glow);
+            }
+        }
+
+        @keyframes correctPulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+                box-shadow: 0 0 40px var(--glow);
+            }
+        }
+
+        @keyframes wrongShake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(-10px);
+            }
+            75% {
+                transform: translateX(10px);
+            }
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .stats {
+                gap: 2rem;
+            }
+
+            .stat-value {
+                font-size: 2rem;
+            }
+
+            .game-grid {
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pattern Memory</h1>
+        <p class="subtitle">Test Your Cognitive Recall</p>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Level</div>
+                <div class="stat-value" id="level">1</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Score</div>
+                <div class="stat-value" id="score">0</div>
+            </div>
+        </div>
+
+        <div class="game-grid" id="gameGrid"></div>
+
+        <div class="controls">
+            <button class="btn" id="startBtn">Start Game</button>
+            <div class="message" id="message"></div>
+        </div>
+    </div>
+
+    <script>
+        class PatternMemoryGame {
+            constructor() {
+                this.grid = document.getElementById('gameGrid');
+                this.startBtn = document.getElementById('startBtn');
+                this.message = document.getElementById('message');
+                this.levelDisplay = document.getElementById('level');
+                this.scoreDisplay = document.getElementById('score');
+
+                this.gridSize = 16;
+                this.level = 1;
+                this.score = 0;
+                this.pattern = [];
+                this.userPattern = [];
+                this.isPlaying = false;
+                this.isShowingPattern = false;
+
+                this.init();
+            }
+
+            init() {
+                this.createGrid();
+                this.startBtn.addEventListener('click', () => this.startGame());
+            }
+
+            createGrid() {
+                this.grid.innerHTML = '';
+                for (let i = 0; i < this.gridSize; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.index = i;
+                    cell.addEventListener('click', () => this.handleCellClick(i));
+                    this.grid.appendChild(cell);
+                }
+            }
+
+            startGame() {
+                this.level = 1;
+                this.score = 0;
+                this.updateDisplay();
+                this.nextLevel();
+            }
+
+            nextLevel() {
+                this.userPattern = [];
+                this.generatePattern();
+                this.showMessage(`Level ${this.level} - Watch the pattern...`);
+                this.disableGrid();
+                this.startBtn.disabled = true;
+
+                setTimeout(() => {
+                    this.showPattern();
+                }, 1000);
+            }
+
+            generatePattern() {
+                this.pattern = [];
+                const patternLength = 3 + this.level;
+                for (let i = 0; i < patternLength; i++) {
+                    const randomIndex = Math.floor(Math.random() * this.gridSize);
+                    this.pattern.push(randomIndex);
+                }
+            }
+
+            async showPattern() {
+                this.isShowingPattern = true;
+                
+                for (let i = 0; i < this.pattern.length; i++) {
+                    const cellIndex = this.pattern[i];
+                    const cell = this.grid.children[cellIndex];
+                    
+                    await this.sleep(400);
+                    cell.classList.add('pattern', 'active');
+                    
+                    await this.sleep(600);
+                    cell.classList.remove('active');
+                    
+                    await this.sleep(200);
+                    cell.classList.remove('pattern');
+                }
+
+                await this.sleep(500);
+                this.isShowingPattern = false;
+                this.enableGrid();
+                this.showMessage('Now repeat the pattern!', 'success');
+            }
+
+            handleCellClick(index) {
+                if (this.isShowingPattern || !this.isPlaying) return;
+
+                const cell = this.grid.children[index];
+                this.userPattern.push(index);
+
+                cell.classList.add('active');
+                setTimeout(() => cell.classList.remove('active'), 300);
+
+                this.checkPattern();
+            }
+
+            checkPattern() {
+                const currentIndex = this.userPattern.length - 1;
+                const correctIndex = this.pattern[currentIndex];
+
+                if (this.userPattern[currentIndex] !== correctIndex) {
+                    this.gameOver();
+                    return;
+                }
+
+                const cell = this.grid.children[this.userPattern[currentIndex]];
+                cell.classList.add('correct');
+                setTimeout(() => cell.classList.remove('correct'), 500);
+
+                if (this.userPattern.length === this.pattern.length) {
+                    this.levelComplete();
+                }
+            }
+
+            levelComplete() {
+                this.score += this.level * 100;
+                this.level++;
+                this.updateDisplay();
+                this.disableGrid();
+                
+                this.showMessage(`Perfect! Advancing to Level ${this.level}...`, 'success');
+                
+                setTimeout(() => {
+                    this.nextLevel();
+                }, 2000);
+            }
+
+            gameOver() {
+                this.isPlaying = false;
+                this.disableGrid();
+                
+                const wrongCells = this.userPattern.map(index => this.grid.children[index]);
+                wrongCells.forEach(cell => {
+                    cell.classList.add('wrong');
+                    setTimeout(() => cell.classList.remove('wrong'), 500);
+                });
+
+                this.showMessage(`Game Over! Final Score: ${this.score}`, 'error');
+                this.startBtn.disabled = false;
+                this.startBtn.textContent = 'Play Again';
+            }
+
+            disableGrid() {
+                this.isPlaying = false;
+                Array.from(this.grid.children).forEach(cell => {
+                    cell.classList.add('disabled');
+                });
+            }
+
+            enableGrid() {
+                this.isPlaying = true;
+                Array.from(this.grid.children).forEach(cell => {
+                    cell.classList.remove('disabled');
+                });
+            }
+
+            updateDisplay() {
+                this.levelDisplay.textContent = this.level;
+                this.scoreDisplay.textContent = this.score;
+            }
+
+            showMessage(text, type = '') {
+                this.message.textContent = text;
+                this.message.className = `message ${type}`;
+            }
+
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        new PatternMemoryGame();
+    </script>
+</body>
+</html>
